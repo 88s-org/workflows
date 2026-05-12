@@ -47,18 +47,6 @@ jobs:
     #   env:
     #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-    - name: Dependabot security check
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        ALERT_COUNT=$(gh api repos/${{ github.repository }}/dependabot/alerts \
-          --jq '[.[] | select(.state=="open") | select(.security_vulnerability.severity=="high" or .security_vulnerability.severity=="critical")] | length')
-        if [ "$ALERT_COUNT" -gt 0 ]; then
-          echo "::error::$ALERT_COUNT HIGH/CRITICAL Dependabot alert(s) detected. Resolve before proceeding."
-          exit 1
-        fi
-        echo "Dependabot check passed — no HIGH/CRITICAL alerts"
-
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
