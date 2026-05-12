@@ -1,4 +1,4 @@
-name: feature-nodejs-pipeline
+name: feature-java-pipeline
 on:
   workflow_call:
     inputs:
@@ -17,7 +17,7 @@ env:
   REGION: us-east-1
 
 jobs:
-  feature-nodejs-pipeline:
+  feature-java-pipeline:
     runs-on: ubuntu-latest
     permissions:
       statuses: write
@@ -28,15 +28,15 @@ jobs:
 
     - name: Read version
       run: |
-        APP_VERSION=$(jq -r .version package.json)
+        APP_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
         echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
 
     - name: Install dependencies
-      run: npm install
+      run: mvn dependency:resolve -q
 
     - name: Unit tests
       id: unit_tests
-      run: npm test
+      run: mvn test -q
 
     - name: Update status — unit-tests
       if: always()
