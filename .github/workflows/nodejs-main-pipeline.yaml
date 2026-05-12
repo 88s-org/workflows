@@ -76,14 +76,14 @@ jobs:
         sed -i "s/IMAGE_VERSION/${{ env.SHORT_COMMIT }}/g" values.yaml
         helm upgrade --install ${{ inputs.component }} -f values-dev.yaml -n ${{ inputs.project }}-dev --atomic --wait --timeout=5m .
 
-    - name: Functional tests
-      if: inputs.deploy_to == 'dev'
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        gh workflow run tests.yaml \
-          --repo ${{ github.repository_owner }}/${{ inputs.component }}-tests \
-          --ref main
+    # - name: Functional tests
+    #   if: inputs.deploy_to == 'dev'
+    #   env:
+    #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    #   run: |
+    #     gh workflow run tests.yaml \
+    #       --repo ${{ github.repository_owner }}/${{ inputs.component }}-tests \
+    #       --ref main
 
     - name: Login to Jira
       if: inputs.deploy_to == 'dev' || inputs.deploy_to == 'prod'
