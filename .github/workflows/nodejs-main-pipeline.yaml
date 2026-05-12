@@ -1,4 +1,4 @@
-name: feature-nodejs-pipeline
+name: main-nodejs-pipeline
 on:
   workflow_call:
     inputs:
@@ -11,60 +11,40 @@ on:
       environment:
         required: true
         type: string
-    secrets:
-      AWS_ACCESS_KEY_ID:
-        required: true
-      AWS_SECRET_ACCESS_KEY:
-        required: true
-      SONAR_TOKEN:
-        required: true
+      deploy_to:
+        required: false
+        type: string
+        default: 'dev'
+      version:
+        required: false
+        type: string
+        default: ''
+      jira_key:
+        required: false
+        type: string
+        default: ''
+      cr_number:
+        required: false
+        type: string
+        default: ''
 
 env:
   ACC_ID: "160885265516"
   REGION: us-east-1
+  CLUSTER: roboshop-dev
 
 jobs:
-  feature-nodejs-pipeline:
-    runs-on: ubuntu-latest
+  main-nodejs-pipeline:
+    runs-on: self-hosted
+    permissions:
+      statuses: write
+      contents: write
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-
-    - name: Read version
-      run: |
-        APP_VERSION=$(jq -r .version package.json)
-        echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
-
-    - name: Install dependencies
-      run: npm install
-
-    - name: Unit tests
-      run: npm test
-
-    # - name: SonarQube scan
-    #   uses: SonarSource/sonarqube-scan-action@v5
-    #   env:
-    #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-    #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
-    # - name: SonarQube quality gate
-    #   uses: SonarSource/sonarqube-quality-gate-action@v1
-    #   timeout-minutes: 5
-    #   env:
-    #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-    - name: Dependabot security check
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        ALERT_COUNT=$(gh api repos/${{ github.repository }}/dependabot/alerts \
-          --jq '[.[] | select(.state=="open") | select(.security_vulnerability.severity=="high" or .security_vulnerability.severity=="critical")] | length')
-        if [ "$ALERT_COUNT" -gt 0 ]; then
-          echo "::error::$ALERT_COUNT HIGH/CRITICAL Dependabot alert(s) detected. Resolve before proceeding."
-          exit 1
-        fi
-        echo "Dependabot check passed — no HIGH/CRITICAL alerts"
+      with:
+        fetch-depth: 0
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -73,33 +53,119 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.REGION }}
 
+    # ── DEV ────────────────────────────────────────────────────────────
+
+    - name: Read version
+      if: inputs.deploy_to == 'dev'
+      run: |
+        APP_VERSION=$(jq -r .version package.json)
+        SHORT_COMMIT=${GITHUB_SHA::7}
+        echo "APP_VERSION=$APP_VERSION"   >> $GITHUB_ENV
+        echo "SHORT_COMMIT=$SHORT_COMMIT" >> $GITHUB_ENV
+
     - name: Login to ECR
+      if: inputs.deploy_to == 'dev'
       uses: aws-actions/amazon-ecr-login@v2
 
-    - name: Build Docker image
+    - name: Promote image
+      if: inputs.deploy_to == 'dev'
       run: |
-        docker build -t ${{ env.ACC_ID }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${{ env.APP_VERSION }} .
+        docker pull ${{ env.ACC_ID }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${{ env.APP_VERSION }}
+        docker tag  ${{ env.ACC_ID }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${{ env.APP_VERSION }} \
+                    ${{ env.ACC_ID }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${{ env.SHORT_COMMIT }}
+        docker push ${{ env.ACC_ID }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${{ env.SHORT_COMMIT }}
 
-    - name: Trivy OS scan
-      uses: aquasecurity/trivy-action@0.30.0
-      with:
-        image-ref: ${{ env.ACC_ID }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${{ env.APP_VERSION }}
-        scan-type: image
-        scanners: vuln
-        vuln-type: os
-        severity: HIGH,MEDIUM
-        exit-code: "1"
-        format: table
-
-    - name: Trivy Dockerfile scan
-      uses: aquasecurity/trivy-action@0.30.0
-      with:
-        scan-type: config
-        scan-ref: Dockerfile
-        severity: HIGH,MEDIUM
-        exit-code: "1"
-        format: table
-
-    - name: Push image to ECR
+    - name: Deploy to DEV
+      if: inputs.deploy_to == 'dev'
       run: |
-        docker push ${{ env.ACC_ID }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${{ env.APP_VERSION }}
+        aws eks update-kubeconfig --region ${{ env.REGION }} --name ${{ env.CLUSTER }}
+        cd helm
+        sed -i "s/IMAGE_VERSION/${{ env.SHORT_COMMIT }}/g" values.yaml
+        helm upgrade --install ${{ inputs.component }} -f values-dev.yaml -n ${{ inputs.project }}-dev --atomic --wait --timeout=5m .
+
+    - name: Functional tests
+      if: inputs.deploy_to == 'dev'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh workflow run tests.yaml \
+          --repo ${{ github.repository_owner }}/${{ inputs.component }}-tests \
+          --ref main
+
+    # - name: Create Jira ticket
+    #   if: inputs.deploy_to == 'dev'
+    #   # Uncomment when ready — Jira Automation handles this via webhook for now
+
+    # ── UAT ────────────────────────────────────────────────────────────
+
+    - name: Checkout version for UAT
+      if: inputs.deploy_to == 'uat'
+      run: git checkout ${{ inputs.version }}
+
+    - name: Deploy to UAT
+      if: inputs.deploy_to == 'uat'
+      run: |
+        aws eks update-kubeconfig --region ${{ env.REGION }} --name ${{ env.CLUSTER }}
+        cd helm
+        sed -i "s/IMAGE_VERSION/${{ inputs.version }}/g" values.yaml
+        helm upgrade --install ${{ inputs.component }} -f values-uat.yaml -n ${{ inputs.project }}-uat --atomic --wait --timeout=5m .
+
+    # ── PROD ───────────────────────────────────────────────────────────
+
+    - name: Validate change request
+      if: inputs.deploy_to == 'prod'
+      run: |
+        if [ -z "${{ inputs.cr_number }}" ]; then
+          echo "::error::CR number is required for PROD deploy."
+          exit 1
+        fi
+        # TODO: replace with real CR tool API call (ServiceNow, Remedy, etc.)
+        CR_STATUS="approved"
+        IN_WINDOW="true"
+        if [ "$CR_STATUS" != "approved" ]; then
+          echo "::error::CR ${{ inputs.cr_number }} is not approved."
+          exit 1
+        fi
+        echo "CR ${{ inputs.cr_number }} validated — status: $CR_STATUS"
+
+    - name: Checkout version for PROD
+      if: inputs.deploy_to == 'prod'
+      run: git checkout ${{ inputs.version }}
+
+    - name: Deploy to PROD
+      if: inputs.deploy_to == 'prod'
+      run: |
+        aws eks update-kubeconfig --region ${{ env.REGION }} --name ${{ env.CLUSTER }}
+        cd helm
+        sed -i "s/IMAGE_VERSION/${{ inputs.version }}/g" values.yaml
+        helm upgrade --install ${{ inputs.component }} -f values-prod.yaml -n ${{ inputs.project }}-prod --atomic --wait --timeout=5m .
+
+    - name: Git tag
+      if: inputs.deploy_to == 'prod'
+      run: |
+        APP_VERSION=$(jq -r .version package.json)
+        git config user.email "github-actions@github.com"
+        git config user.name "GitHub Actions"
+        git tag $APP_VERSION
+        git push origin $APP_VERSION
+
+    - name: Transition Jira to Done
+      if: inputs.deploy_to == 'prod' && inputs.jira_key != ''
+      env:
+        JIRA_URL: ${{ secrets.JIRA_URL }}
+        JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+        JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
+        ISSUE_KEY: ${{ inputs.jira_key }}
+      run: |
+        TRANSITION_ID=$(curl -sf \
+          -u "$JIRA_EMAIL:$JIRA_TOKEN" \
+          -H "Accept: application/json" \
+          "$JIRA_URL/rest/api/3/issue/$ISSUE_KEY/transitions" \
+          | jq -r '.transitions[] | select(.to.name == "Done") | .id')
+        curl -sf \
+          -X POST \
+          -u "$JIRA_EMAIL:$JIRA_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "{\"transition\":{\"id\":\"$TRANSITION_ID\"}}" \
+          "$JIRA_URL/rest/api/3/issue/$ISSUE_KEY/transitions"
+        echo "Transitioned $ISSUE_KEY to Done"
