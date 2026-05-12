@@ -18,7 +18,7 @@ env:
 
 jobs:
   feature-nodejs-pipeline:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     permissions:
       statuses: write
 
