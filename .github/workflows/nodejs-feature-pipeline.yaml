@@ -8,9 +8,6 @@ on:
       component:
         required: true
         type: string
-      environment:
-        required: true
-        type: string
 
 env:
   ACC_ID: "160885265516"
@@ -19,19 +16,19 @@ env:
 jobs:
   feature-nodejs-pipeline:
     runs-on: self-hosted
-    permissions:
-      statuses: write
-
     steps:
     - name: Checkout code
+      id: checkout_code
       uses: actions/checkout@v4
 
     - name: Read version
+      id: package_version
       run: |
         APP_VERSION=$(jq -r .version package.json)
         echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
 
     - name: Install dependencies
+      id: install_dependencies
       run: npm install
 
     - name: Unit tests
@@ -39,6 +36,7 @@ jobs:
       run: npm test
 
     - name: Update status — unit-tests
+      id: update_unit_tests_status
       if: always()
       uses: 88s-org/workflows/.github/actions/update-commit-status@main
       with:
