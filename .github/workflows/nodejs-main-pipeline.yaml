@@ -1,0 +1,107 @@
+name: feature-nodejs-pipeline
+on:
+  workflow_call:
+    inputs:
+      project:
+        required: true
+        type: string
+      component:
+        required: true
+        type: string
+      environment:
+        required: true
+        type: string
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      SONAR_TOKEN:
+        required: true
+      SONAR_HOST_URL:
+        required: true
+
+env:
+  ACC_ID: "160885265516"
+  REGION: us-east-1
+
+jobs:
+  feature-nodejs-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Read version
+      run: |
+        APP_VERSION=$(jq -r .version package.json)
+        echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Unit tests
+      run: npm test
+
+    # - name: SonarQube scan
+    #   uses: SonarSource/sonarqube-scan-action@v5
+    #   env:
+    #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+    # - name: SonarQube quality gate
+    #   uses: SonarSource/sonarqube-quality-gate-action@v1
+    #   timeout-minutes: 5
+    #   env:
+    #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+    - name: Dependabot security check
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        ALERT_COUNT=$(gh api repos/${{ github.repository }}/dependabot/alerts \
+          --jq '[.[] | select(.state=="open") | select(.security_vulnerability.severity=="high" or .security_vulnerability.severity=="critical")] | length')
+        if [ "$ALERT_COUNT" -gt 0 ]; then
+          echo "::error::$ALERT_COUNT HIGH/CRITICAL Dependabot alert(s) detected. Resolve before proceeding."
+          exit 1
+        fi
+        echo "Dependabot check passed — no HIGH/CRITICAL alerts"
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.REGION }}
+
+    - name: Login to ECR
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build Docker image
+      run: |
+        docker build -t ${{ env.ACC_ID }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${{ env.APP_VERSION }} .
+
+    - name: Trivy OS scan
+      uses: aquasecurity/trivy-action@0.30.0
+      with:
+        image-ref: ${{ env.ACC_ID }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${{ env.APP_VERSION }}
+        scan-type: image
+        scanners: vuln
+        vuln-type: os
+        severity: HIGH,MEDIUM
+        exit-code: "1"
+        format: table
+
+    - name: Trivy Dockerfile scan
+      uses: aquasecurity/trivy-action@0.30.0
+      with:
+        scan-type: config
+        scan-ref: Dockerfile
+        severity: HIGH,MEDIUM
+        exit-code: "1"
+        format: table
+
+    - name: Push image to ECR
+      run: |
+        docker push ${{ env.ACC_ID }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${{ env.APP_VERSION }}
