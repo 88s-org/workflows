@@ -8,9 +8,6 @@ on:
       component:
         required: true
         type: string
-      environment:
-        required: true
-        type: string
       deploy_to:
         required: false
         type: string
