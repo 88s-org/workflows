@@ -18,8 +18,6 @@ on:
         required: true
       SONAR_TOKEN:
         required: true
-      SONAR_HOST_URL:
-        required: true
 
 env:
   ACC_ID: "160885265516"
