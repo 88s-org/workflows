@@ -11,15 +11,6 @@ on:
       environment:
         required: true
         type: string
-    secrets:
-      AWS_ACCESS_KEY_ID:
-        required: true
-      AWS_SECRET_ACCESS_KEY:
-        required: true
-      SONAR_TOKEN:
-        required: false
-      SONAR_HOST_URL:
-        required: false
 
 env:
   ACC_ID: "160885265516"
@@ -55,6 +46,13 @@ jobs:
     #   timeout-minutes: 5
     #   env:
     #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+    - name: Dependabot security check
+      uses: Posture-Cybersecurity/dependabot-security-checker@v1.1.0
+      with:
+        github-token: ${{ secrets.DEPENDABOT_TOKEN }}
+        severities: 'critical,high'
+        fail-on-alerts: 'true'
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
