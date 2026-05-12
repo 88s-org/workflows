@@ -19,9 +19,6 @@ env:
 jobs:
   feature-nodejs-pipeline:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: read
 
     steps:
     - name: Checkout code
