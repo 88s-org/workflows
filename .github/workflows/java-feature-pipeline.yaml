@@ -40,7 +40,7 @@ jobs:
 
     - name: Update status — unit-tests
       if: always()
-      uses: ./.github/actions/update-commit-status
+      uses: 88s-org/workflows/.github/actions/update-commit-status@main
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         context: unit-tests
@@ -63,7 +63,7 @@ jobs:
 
     - name: Update status — sonar-scan
       if: always()
-      uses: ./.github/actions/update-commit-status
+      uses: 88s-org/workflows/.github/actions/update-commit-status@main
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         context: sonar-scan
@@ -80,7 +80,7 @@ jobs:
 
     - name: Update status — library-scan
       if: always()
-      uses: ./.github/actions/update-commit-status
+      uses: 88s-org/workflows/.github/actions/update-commit-status@main
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         context: library-scan
@@ -127,7 +127,7 @@ jobs:
 
     - name: Update status — trivy-scan
       if: always()
-      uses: ./.github/actions/update-commit-status
+      uses: 88s-org/workflows/.github/actions/update-commit-status@main
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         context: trivy-scan
@@ -145,7 +145,7 @@ jobs:
 
     - name: Update status — push-image
       if: always()
-      uses: ./.github/actions/update-commit-status
+      uses: 88s-org/workflows/.github/actions/update-commit-status@main
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         context: push-image
