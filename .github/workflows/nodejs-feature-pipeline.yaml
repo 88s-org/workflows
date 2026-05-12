@@ -74,7 +74,7 @@ jobs:
         docker build -t ${{ env.ACC_ID }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${{ env.APP_VERSION }} .
 
     - name: Trivy OS scan
-      uses: aquasecurity/trivy-action@0.30.0
+      uses: aquasecurity/trivy-action@master
       with:
         image-ref: ${{ env.ACC_ID }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${{ env.APP_VERSION }}
         scan-type: image
@@ -85,7 +85,7 @@ jobs:
         format: table
 
     - name: Trivy Dockerfile scan
-      uses: aquasecurity/trivy-action@0.30.0
+      uses: aquasecurity/trivy-action@master
       with:
         scan-type: config
         scan-ref: Dockerfile
