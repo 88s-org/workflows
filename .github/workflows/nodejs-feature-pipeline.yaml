@@ -45,28 +45,28 @@ jobs:
         state: ${{ steps.unit_tests.outcome }}
         description: Unit tests ${{ steps.unit_tests.outcome }}
 
-    # - name: SonarQube scan
-    #   id: sonar_scan
-    #   uses: SonarSource/sonarqube-scan-action@v6
-    #   env:
-    #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-    #     SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+    - name: SonarQube scan
+      id: sonar_scan
+      uses: SonarSource/sonarqube-scan-action@v6
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
 
-    # - name: SonarQube quality gate
-    #   id: sonar_gate
-    #   uses: SonarSource/sonarqube-quality-gate-action@v1
-    #   timeout-minutes: 5
-    #   env:
-    #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    - name: SonarQube quality gate
+      id: sonar_gate
+      uses: SonarSource/sonarqube-quality-gate-action@v1
+      timeout-minutes: 5
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-    # - name: Update status — sonar-scan
-    #   #if: always()
-    #   uses: 88s-org/workflows/.github/actions/update-commit-status@main
-    #   with:
-    #     token: ${{ secrets.GITHUB_TOKEN }}
-    #     context: sonar-scan
-    #     state: ${{ steps.sonar_gate.outcome }}
-    #     description: SonarQube quality gate ${{ steps.sonar_gate.outcome }}
+    - name: Update status — sonar-scan
+      #if: always()
+      uses: 88s-org/workflows/.github/actions/update-commit-status@main
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        context: sonar-scan
+        state: ${{ steps.sonar_gate.outcome }}
+        description: SonarQube quality gate ${{ steps.sonar_gate.outcome }}
 
     - name: Dependabot security check
       id: library_scan
