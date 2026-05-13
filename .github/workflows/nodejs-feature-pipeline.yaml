@@ -59,14 +59,14 @@ jobs:
     #   env:
     #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-    - name: Update status — sonar-scan
-      if: always()
-      uses: 88s-org/workflows/.github/actions/update-commit-status@main
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        context: sonar-scan
-        state: ${{ steps.sonar_gate.outcome }}
-        description: SonarQube quality gate ${{ steps.sonar_gate.outcome }}
+    # - name: Update status — sonar-scan
+    #   if: always()
+    #   uses: 88s-org/workflows/.github/actions/update-commit-status@main
+    #   with:
+    #     token: ${{ secrets.GITHUB_TOKEN }}
+    #     context: sonar-scan
+    #     state: ${{ steps.sonar_gate.outcome }}
+    #     description: SonarQube quality gate ${{ steps.sonar_gate.outcome }}
 
     - name: Dependabot security check
       id: library_scan
