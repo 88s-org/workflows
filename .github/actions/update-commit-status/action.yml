@@ -14,6 +14,17 @@ inputs:
     description: Short message shown in GitHub UI (max 140 chars)
     required: false
     default: ''
+
+# -----------------------------------------------------------------------------
+# CURRENT APPROACH: composite
+# -----------------------------------------------------------------------------
+# "composite" means this action is just a sequence of shell steps — no runtime
+# needed. GitHub executes the steps directly on the runner, same as a workflow.
+# Inputs are passed in via env vars and a single curl call hits the GitHub API.
+# Pros: zero setup, works on any runner, easy to read and change.
+# Cons: depends on curl being available; shell quoting can get tricky.
+# -----------------------------------------------------------------------------
+
 runs:
   using: composite
   steps:
@@ -34,3 +45,49 @@ runs:
           -H "Content-Type: application/json" \
           -d "{\"state\":\"$STATE\",\"context\":\"$CONTEXT\",\"description\":\"$DESCRIPTION\"}" \
           "https://api.github.com/repos/$REPO/statuses/$SHA"
+
+# -----------------------------------------------------------------------------
+# IF THIS WERE node20 — what would change:
+# -----------------------------------------------------------------------------
+# 1. The "runs" block would look like this instead:
+#
+#      runs:
+#        using: node20
+#        main: dist/index.js      # compiled output — you run "npm run build" first
+#        post: dist/cleanup.js    # optional: runs after the job (for teardown)
+#
+# 2. You would write a src/index.ts (or index.js) file like:
+#
+#      import * as core from '@actions/core';        // reads inputs, sets outputs
+#      import * as github from '@actions/github';    // GitHub context (sha, repo)
+#
+#      const token   = core.getInput('token');
+#      const state   = core.getInput('state');
+#      const context = core.getInput('context');
+#      const desc    = core.getInput('description');
+#
+#      const octokit = github.getOctokit(token);    // Octokit client — no curl needed
+#      await octokit.rest.repos.createCommitStatus({
+#        owner: github.context.repo.owner,
+#        repo:  github.context.repo.repo,
+#        sha:   github.context.sha,
+#        state, context, description: desc,
+#      });
+#
+# 3. You would need a package.json with at minimum:
+#      "@actions/core": "^1.10.0"
+#      "@actions/github": "^6.0.0"
+#    and a build step (e.g. ncc or tsc) that compiles to dist/index.js
+#    before committing — the dist/ folder must be committed to the repo.
+#
+# WHY pick node20 over composite for this action?
+#   - No dependency on curl or bash — runs on Windows runners too without change
+#   - Octokit handles auth, retries, and error messages cleanly
+#   - Easier to add outputs (core.setOutput) or error handling (core.setFailed)
+#   - Better for more complex logic (loops, conditionals, multiple API calls)
+#
+# WHY keep composite here?
+#   - This action does exactly one thing: one POST request
+#   - composite requires zero build tooling or npm dependencies
+#   - Any DevOps engineer can read and edit the curl command instantly
+# -----------------------------------------------------------------------------
